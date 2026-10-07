@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import logging
 import os
 import re
 import sqlite3
@@ -16,6 +17,8 @@ import requests
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger("tams_service")
 
 
 POSTBACK_RE = re.compile(r"__doPostBack\('([^']+)'")
@@ -497,9 +500,17 @@ class TamsScraper:
         if not raw_value:
             return None
 
-        parsed = datetime.strptime(raw_value, "%d/%m/%Y %H:%M:%S")
-        localized = parsed.replace(tzinfo=self.source_zone)
-        return localized.astimezone(timezone.utc).isoformat()
+        clean_value = raw_value.strip()
+        for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M:%S", "%d-%m-%Y %H:%M:%S"):
+            try:
+                parsed = datetime.strptime(clean_value, fmt)
+                localized = parsed.replace(tzinfo=self.source_zone)
+                return localized.astimezone(timezone.utc).isoformat()
+            except ValueError:
+                continue
+
+        logger.warning("No se pudo parsear fecha de actualización: %s", raw_value)
+        return None
 
     def _parse_scheduled_at(self, raw_value: str, source_updated_at_utc: str | None) -> str | None:
         if not raw_value or not source_updated_at_utc:
@@ -631,7 +642,7 @@ class SyncWorker:
         try:
             self.service.sync()
         except Exception as exc:
-            print(f"[sync-worker] error: {exc}")
+            logger.exception("[sync-worker] error durante la sincronización: %s", exc)
 
 
 config = AppConfig.load()
