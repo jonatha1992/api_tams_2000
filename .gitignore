@@ -12,3 +12,7 @@ data/
 *.sqlite
 *.user
 *.suo
+
+!.vscode/
+!.vscode/launch.json
+!.vscode/tasks.json
